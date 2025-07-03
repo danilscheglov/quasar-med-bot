@@ -45,6 +45,7 @@ public class BotMessages {
             Пожалуйста, проверьте данные\\.""";
 
     public static final String PRESSURE_PARSE_ERROR = "❗ Ошибка: введите числовые значения в формате `число/число` \\(например, 120/80\\)\\.";
+    public static final String RESTART_INSTRUCTION = "❗ Для повтора ввода показаний введите /start";
 
     public static final String NAME_RECORDED = "✅ *ФИО записано*: ";
     public static final String BIRTHDATE_RECORDED = "✅ *Дата рождения записана*: ";
