@@ -117,7 +117,7 @@ public class MessageProcessorService {
             });
 
             UserData u = userData.get(chatId);
-            crpApiService.searchByFioAndBirthdate(u.getLastName(), u.getFirstName(), u.getMiddleName(), u.getBirthdate().format(DateUtils.API_FORMATTER));
+            crpApiService.search(u.getLastName(), u.getFirstName(), u.getMiddleName(), u.getBirthdate().format(DateUtils.API_FORMATTER));
 
             state.setState(State.AWAITING_NAME);
             userStates.put(chatId, state);
