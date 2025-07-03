@@ -2,7 +2,7 @@ package dev.danilscheglov.quasarmedbot.model;
 
 import java.time.LocalDate;
 
-public class UserData {
+public class User {
 
     private String lastName;
     private String firstName;
@@ -10,12 +10,15 @@ public class UserData {
     private LocalDate birthdate;
     private String pressure;
 
-    public UserData(String lastName, String firstName, String middleName, LocalDate birthdate) {
+    public User() {
+    }
+
+    public User(String lastName, String firstName, String middleName, LocalDate birthdate, String pressure) {
         this.lastName = lastName;
         this.firstName = firstName;
         this.middleName = middleName;
         this.birthdate = birthdate;
-        this.pressure = null;
+        this.pressure = pressure;
     }
 
     public String getLastName() {

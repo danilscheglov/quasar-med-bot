@@ -1,8 +1,10 @@
 package dev.danilscheglov.quasarmedbot.service;
 
+import dev.danilscheglov.quasarmedbot.model.User;
 import dev.danilscheglov.quasarmedbot.model.UserData;
 import dev.danilscheglov.quasarmedbot.model.UserState;
 import dev.danilscheglov.quasarmedbot.model.enums.State;
+import dev.danilscheglov.quasarmedbot.repository.UserJdbcRepository;
 import dev.danilscheglov.quasarmedbot.util.BotMessages;
 import dev.danilscheglov.quasarmedbot.util.BotPatterns;
 import dev.danilscheglov.quasarmedbot.util.DateUtils;
@@ -24,10 +26,13 @@ public class MessageProcessorService {
     private final Map<Long, UserState> userStates = new ConcurrentHashMap<>();
     private final Map<Long, UserData> userData = new ConcurrentHashMap<>();
 
+    private final UserJdbcRepository userJdbcRepository;
     private final CrpApiService crpApiService;
 
-    public MessageProcessorService(CrpApiService crpApiService) {
+    public MessageProcessorService(UserJdbcRepository userJdbcRepository, CrpApiService crpApiService) {
+        this.userJdbcRepository = userJdbcRepository;
         this.crpApiService = crpApiService;
+        userJdbcRepository.initializeTable();
     }
 
     public List<String> processMessage(long chatId, String text) {
@@ -119,10 +124,13 @@ public class MessageProcessorService {
             UserData u = userData.get(chatId);
             crpApiService.search(u.getLastName(), u.getFirstName(), u.getMiddleName(), u.getBirthdate().format(DateUtils.API_FORMATTER));
 
+            User user = new User(u.getLastName(), u.getFirstName(), u.getMiddleName(), u.getBirthdate(), u.getPressure());
+            userJdbcRepository.save(user);
+
             state.setState(State.AWAITING_NAME);
             userStates.put(chatId, state);
 
-            return Arrays.asList(BotMessages.PRESSURE_RECORDED + escapeMarkdown(text), BotMessages.DATA_SENT);
+            return Arrays.asList(BotMessages.PRESSURE_RECORDED + escapeMarkdown(text), BotMessages.DATA_SENT, BotMessages.RESTART_INSTRUCTION);
         } catch (NumberFormatException ex) {
             return Collections.singletonList(BotMessages.PRESSURE_PARSE_ERROR);
         }

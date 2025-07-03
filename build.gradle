@@ -14,6 +14,8 @@ repositories {
 dependencies {
     implementation("org.telegram:telegrambots:6.9.7.1")
     implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation("org.xerial:sqlite-jdbc:3.49.1.0")
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
