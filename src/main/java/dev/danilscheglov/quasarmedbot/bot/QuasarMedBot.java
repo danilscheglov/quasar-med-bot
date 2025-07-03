@@ -23,12 +23,12 @@ public class QuasarMedBot extends TelegramLongPollingBot {
 
     @Override
     public String getBotToken() {
-        return quasarMedBotConfiguration.getToken();
+        return quasarMedBotConfiguration.token();
     }
 
     @Override
     public String getBotUsername() {
-        return quasarMedBotConfiguration.getUsername();
+        return quasarMedBotConfiguration.username();
     }
 
     @Override
