@@ -4,10 +4,11 @@ import dev.danilscheglov.quasarmedbot.model.UserData;
 import dev.danilscheglov.quasarmedbot.model.UserState;
 import dev.danilscheglov.quasarmedbot.model.enums.State;
 import dev.danilscheglov.quasarmedbot.util.BotMessages;
+import dev.danilscheglov.quasarmedbot.util.BotPatterns;
+import dev.danilscheglov.quasarmedbot.util.DateUtils;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -15,26 +16,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static dev.danilscheglov.quasarmedbot.util.BotUtils.escapeMarkdown;
+
 @Service
-public class MessageProcessor {
-
-    private static final String NAME_PATTERN = "^[a-zA-Zа-яА-Я\\s]+$";
-    private static final String DATE_PATTERN = "^\\d{2}\\.\\d{2}\\.\\d{4}$";
-    private static final String PRESSURE_PATTERN = "^\\d+/\\d+$";
-
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd.MM.yyyy");
+public class MessageProcessorService {
 
     private final Map<Long, UserState> userStates = new ConcurrentHashMap<>();
     private final Map<Long, UserData> userData = new ConcurrentHashMap<>();
 
-    private String escapeMarkdown(String text) {
-        return text.replace(".", "\\.").replace("-", "\\-").replace("!", "\\!");
+    private final CrpApiService crpApiService;
+
+    public MessageProcessorService(CrpApiService crpApiService) {
+        this.crpApiService = crpApiService;
     }
 
     public List<String> processMessage(long chatId, String text) {
         if (text.startsWith("/")) {
-            String response = processCommand(chatId, text);
-            return Arrays.asList(response, BotMessages.REQUEST_NAME);
+            String cmdResponse = processCommand(chatId, text);
+            return Arrays.asList(cmdResponse, BotMessages.REQUEST_NAME);
         }
 
         UserState state = userStates.computeIfAbsent(chatId, id -> new UserState(State.AWAITING_NAME));
@@ -42,12 +41,12 @@ public class MessageProcessor {
         return switch (state.getState()) {
             case AWAITING_NAME -> processName(chatId, text, state);
             case AWAITING_BIRTHDATE -> processBirthdate(chatId, text, state);
-            case AWAITING_PRESSURE -> processPressureReading(text);
+            case AWAITING_PRESSURE -> processPressureReading(chatId, text, state);
         };
     }
 
     private String processCommand(long chatId, String command) {
-        if (command.equalsIgnoreCase("/start")) {
+        if ("/start".equalsIgnoreCase(command)) {
             userStates.put(chatId, new UserState(State.AWAITING_NAME));
             userData.remove(chatId);
             return BotMessages.START_MESSAGE;
@@ -56,40 +55,50 @@ public class MessageProcessor {
     }
 
     private List<String> processName(long chatId, String text, UserState state) {
-        if (!text.matches(NAME_PATTERN)) {
+        if (!text.matches(BotPatterns.NAME_PATTERN)) {
             return Collections.singletonList(BotMessages.REQUEST_NAME);
         }
 
-        state.setName(text);
+        String[] parts = text.trim().split("\\s+");
+        if (parts.length < 1 || parts.length > 3) {
+            return Collections.singletonList(BotMessages.INVALID_NAME_PARTS);
+        }
+
+        String lastName = parts[0];
+        String firstName = parts.length > 1 ? parts[1] : "";
+        String middleName = parts.length > 2 ? parts[2] : "";
+
+        userData.put(chatId, new UserData(lastName, firstName, middleName, null));
         state.setState(State.AWAITING_BIRTHDATE);
         userStates.put(chatId, state);
-        return Arrays.asList("✅ *ФИО записано*: " + escapeMarkdown(text), BotMessages.REQUEST_BIRTHDATE);
+
+        return Arrays.asList(BotMessages.NAME_RECORDED + escapeMarkdown(text), BotMessages.REQUEST_BIRTHDATE);
     }
 
     private List<String> processBirthdate(long chatId, String text, UserState state) {
-        if (!text.matches(DATE_PATTERN)) {
+        if (!text.matches(BotPatterns.DATE_PATTERN)) {
             return Collections.singletonList(BotMessages.REQUEST_BIRTHDATE);
         }
 
         try {
-            LocalDate birthdate = LocalDate.parse(text, DATE_FORMATTER);
-            LocalDate today = LocalDate.now();
-
-            if (birthdate.isAfter(today) || birthdate.isBefore(today.minusYears(100))) {
+            LocalDate birthdate = LocalDate.parse(text, DateUtils.UI_FORMATTER);
+            if (!DateUtils.isDateInValidRange(birthdate)) {
                 return Collections.singletonList(BotMessages.INVALID_BIRTHDATE_RANGE);
             }
 
-            userData.put(chatId, new UserData(state.getName(), birthdate));
+            userData.computeIfPresent(chatId, (id, d) -> new UserData(d.getLastName(), d.getFirstName(), d.getMiddleName(), birthdate));
+
             state.setState(State.AWAITING_PRESSURE);
             userStates.put(chatId, state);
-            return Arrays.asList("✅ *Дата рождения записана*: " + escapeMarkdown(text), BotMessages.REQUEST_PRESSURE);
-        } catch (DateTimeParseException e) {
+
+            return Arrays.asList(BotMessages.BIRTHDATE_RECORDED + escapeMarkdown(text), BotMessages.REQUEST_PRESSURE);
+        } catch (DateTimeParseException ex) {
             return Collections.singletonList(BotMessages.INVALID_BIRTHDATE_FORMAT);
         }
     }
 
-    private List<String> processPressureReading(String text) {
-        if (!text.matches(PRESSURE_PATTERN)) {
+    private List<String> processPressureReading(long chatId, String text, UserState state) {
+        if (!text.matches(BotPatterns.PRESSURE_PATTERN)) {
             return Collections.singletonList(BotMessages.INVALID_PRESSURE_FORMAT);
         }
 
@@ -102,8 +111,19 @@ public class MessageProcessor {
                 return Collections.singletonList(BotMessages.PRESSURE_OUT_OF_RANGE);
             }
 
-            return Collections.singletonList("✅ *Показания давления записаны*: " + escapeMarkdown(text));
-        } catch (NumberFormatException e) {
+            userData.computeIfPresent(chatId, (id, d) -> {
+                d.setPressure(text);
+                return d;
+            });
+
+            UserData u = userData.get(chatId);
+            crpApiService.searchByFioAndBirthdate(u.getLastName(), u.getFirstName(), u.getMiddleName(), u.getBirthdate().format(DateUtils.API_FORMATTER));
+
+            state.setState(State.AWAITING_NAME);
+            userStates.put(chatId, state);
+
+            return Arrays.asList(BotMessages.PRESSURE_RECORDED + escapeMarkdown(text), BotMessages.DATA_SENT);
+        } catch (NumberFormatException ex) {
             return Collections.singletonList(BotMessages.PRESSURE_PARSE_ERROR);
         }
     }

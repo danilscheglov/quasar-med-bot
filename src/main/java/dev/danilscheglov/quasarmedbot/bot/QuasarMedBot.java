@@ -1,7 +1,7 @@
 package dev.danilscheglov.quasarmedbot.bot;
 
 import dev.danilscheglov.quasarmedbot.configuration.QuasarMedBotConfiguration;
-import dev.danilscheglov.quasarmedbot.service.MessageProcessor;
+import dev.danilscheglov.quasarmedbot.service.MessageProcessorService;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -14,11 +14,11 @@ import java.util.List;
 public class QuasarMedBot extends TelegramLongPollingBot {
 
     private final QuasarMedBotConfiguration quasarMedBotConfiguration;
-    private final MessageProcessor messageProcessor;
+    private final MessageProcessorService messageProcessorService;
 
-    public QuasarMedBot(QuasarMedBotConfiguration quasarMedBotConfiguration, MessageProcessor messageProcessor) {
+    public QuasarMedBot(QuasarMedBotConfiguration quasarMedBotConfiguration, MessageProcessorService messageProcessorService) {
         this.quasarMedBotConfiguration = quasarMedBotConfiguration;
-        this.messageProcessor = messageProcessor;
+        this.messageProcessorService = messageProcessorService;
     }
 
     @Override
@@ -41,7 +41,7 @@ public class QuasarMedBot extends TelegramLongPollingBot {
         long chatId = update.getMessage().getChatId();
 
         try {
-            List<String> responses = messageProcessor.processMessage(chatId, text);
+            List<String> responses = messageProcessorService.processMessage(chatId, text);
             if (responses != null) {
                 for (String response : responses) {
                     sendMessage(chatId, response, true);
