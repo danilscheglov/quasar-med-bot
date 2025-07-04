@@ -39,9 +39,10 @@ public class QuasarMedBot extends TelegramLongPollingBot {
 
         String text = update.getMessage().getText();
         long chatId = update.getMessage().getChatId();
+        String username = update.getMessage().getFrom() != null ? update.getMessage().getFrom().getUserName() : "unknown";
 
         try {
-            List<String> responses = messageProcessorService.processMessage(chatId, text);
+            List<String> responses = messageProcessorService.processMessage(chatId, text, username);
             if (responses != null) {
                 for (String response : responses) {
                     sendMessage(chatId, response, true);
@@ -65,5 +66,4 @@ public class QuasarMedBot extends TelegramLongPollingBot {
             throw new RuntimeException(e);
         }
     }
-
 }

@@ -35,7 +35,7 @@ public class MessageProcessorService {
         userJdbcRepository.initializeTable();
     }
 
-    public List<String> processMessage(long chatId, String text) {
+    public List<String> processMessage(long chatId, String text, String username) {
         if (text.startsWith("/")) {
             String cmdResponse = processCommand(chatId, text);
             return Arrays.asList(cmdResponse, BotMessages.REQUEST_NAME);
@@ -46,7 +46,7 @@ public class MessageProcessorService {
         return switch (state.getState()) {
             case AWAITING_NAME -> processName(chatId, text, state);
             case AWAITING_BIRTHDATE -> processBirthdate(chatId, text, state);
-            case AWAITING_PRESSURE -> processPressureReading(chatId, text, state);
+            case AWAITING_PRESSURE -> processPressureReading(chatId, text, state, username);
         };
     }
 
@@ -102,7 +102,7 @@ public class MessageProcessorService {
         }
     }
 
-    private List<String> processPressureReading(long chatId, String text, UserState state) {
+    private List<String> processPressureReading(long chatId, String text, UserState state, String username) {
         if (!text.matches(BotPatterns.PRESSURE_PATTERN)) {
             return Collections.singletonList(BotMessages.INVALID_PRESSURE_FORMAT);
         }
@@ -116,16 +116,18 @@ public class MessageProcessorService {
                 return Collections.singletonList(BotMessages.PRESSURE_OUT_OF_RANGE);
             }
 
-            userData.computeIfPresent(chatId, (id, d) -> {
+            UserData u = userData.computeIfPresent(chatId, (id, d) -> {
                 d.setPressure(text);
                 return d;
             });
 
-            UserData u = userData.get(chatId);
-            crpApiService.search(u.getLastName(), u.getFirstName(), u.getMiddleName(), u.getBirthdate().format(DateUtils.API_FORMATTER));
+            String crpId = null;
+            if (!userJdbcRepository.existsUser(chatId, u.getLastName(), u.getFirstName(), u.getMiddleName(), u.getBirthdate())) {
+                crpId = crpApiService.search(u.getLastName(), u.getFirstName(), u.getMiddleName(), u.getBirthdate().format(DateUtils.API_FORMATTER));
+            }
 
             User user = new User(u.getLastName(), u.getFirstName(), u.getMiddleName(), u.getBirthdate(), u.getPressure());
-            userJdbcRepository.save(user);
+            userJdbcRepository.save(user, chatId, username, crpId, u.getPressure());
 
             state.setState(State.AWAITING_NAME);
             userStates.put(chatId, state);
@@ -133,6 +135,8 @@ public class MessageProcessorService {
             return Arrays.asList(BotMessages.PRESSURE_RECORDED + escapeMarkdown(text), BotMessages.DATA_SENT, BotMessages.RESTART_INSTRUCTION);
         } catch (NumberFormatException ex) {
             return Collections.singletonList(BotMessages.PRESSURE_PARSE_ERROR);
+        } catch (Exception ex) {
+            return Collections.singletonList("❗ Произошла ошибка. Пожалуйста, попробуйте снова.");
         }
     }
 }
