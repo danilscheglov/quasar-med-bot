@@ -129,10 +129,14 @@ public class MessageProcessorService {
             User user = new User(u.getLastName(), u.getFirstName(), u.getMiddleName(), u.getBirthdate(), u.getPressure());
             userJdbcRepository.save(user, chatId, username, crpId, u.getPressure());
 
+            crpApiService.sendToQuasar(crpId, u.getLastName(), u.getFirstName(), u.getMiddleName(), u.getPressure());
+
             state.setState(State.AWAITING_NAME);
             userStates.put(chatId, state);
 
             return Arrays.asList(BotMessages.PRESSURE_RECORDED + escapeMarkdown(text), BotMessages.DATA_SENT, BotMessages.RESTART_INSTRUCTION);
+        } catch (IllegalStateException e) {
+            return Collections.singletonList("❗ Ошибка: найдено более одного идентификатора. Обратитесь в поддержку.");
         } catch (NumberFormatException ex) {
             return Collections.singletonList(BotMessages.PRESSURE_PARSE_ERROR);
         } catch (Exception ex) {
